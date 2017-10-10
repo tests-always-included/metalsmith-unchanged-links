@@ -1,7 +1,7 @@
-Metalsmith Link Globs
-=====================
+Metalsmith Unchanged Links
+==========================
 
-Repeat your `<script>`, `<link>`, `<img>` and `<a>` tags in your HTML by using a wildcard pattern in your `src=` or `href=` attributes.
+Find Markdown links that were not converted to HTML links because of a typo or because the name didn't match.
 
 [![npm version][npm-badge]][npm-link]
 [![Build Status][travis-badge]][travis-link]
@@ -13,38 +13,27 @@ Repeat your `<script>`, `<link>`, `<img>` and `<a>` tags in your HTML by using a
 Overview
 --------
 
-When building HTML files that should link to a bunch of JavaScript files, one can hardcode each link, but that is tedious. It also doesn't work well when you want to use the same HTML but link to JavaScript that has not been concatenated nor minified. Why not just pull the list of files from Metalsmith?
+Take this imaginary Markdown.
 
-    <html>
-        <head>
-            <title> BEFORE THE PLUGIN </title>
-            <script src="third-party/angular.js"></script>
-            <script src="third-party/angular-ui.js"></script>
-            <script src="third-party/sha512.js"></script>
-            <script src="my-app.js"></script>
-            <script src="other-thing.js"></script>
-            <link rel="stylesheet" href="third-party/normalize.css">
-            <link rel="stylesheet" href="third-party/angular-ui.css">
-            <link rel="stylesheet" href="themes/clean-looks.css">
-            <link rel="stylesheet" href="themes/base.css">
-            <link rel="stylesheet" href="site.css">
-            <link rel="stylesheet" href="atomic.css">
+    Make sure you enable [Multi-Factor Authentication] on the account.
+    It is part of our [security guidelines][security handbook].
+    Oh, and read [this page][page.html) for more information.
 
-This can be reduced to the following:
+    [Multi Factor Authentication]: mfa/
+    [security policy]: security-policy/
 
-    <html>
-        <head>
-            <title> WITH THE PLUGIN </title>
-            <script src="third-party/**/*.js"></script>
-            <script src="!(third-party)**/*.js"></script>
-            <link rel="stylesheet" href="**/*.css">
+All of the links are broken for different reasons.  The first link is to `[Multi-Factor Authentication]` but the link definition at the bottom excludes the hyphen. The second link indirectly references `[security handbook]` but the link definition is for `[security policy]`. Lastly, the `[this page]` link isn't rendered because it should have a parenthesis instead of a bracket at the beginning of the URL.
+
+The Markdown engine won't see your broken links and warn you. Instead, it cheerfully converts it as text. This is not a problem with the Markdown engine, but it does pose a problem if you have links that are broken on your site.
+
+The solution is to parse the HTML and look for text that matches a pattern that would match markdown links. It does mean that you can't use things like `[1]` as footnotes without converting them to code, or else you could configure the tool to exclude your use of brackets.
 
 You would simply add this plugin to your `.use()` chain in Metalsmith.
 
-    var linkGlobs = require("metalsmith-link-globs");
+    var unchnagedLinks = require("metalsmith-unchanged-links");
 
     // ...
-    .use(linkGlobs);
+    .use(unchangedLinks);
 
 If the default settings don't work for you, there are options you can use to tailor how the library works.
 
@@ -54,7 +43,7 @@ Installation
 
 Use `npm` to install this package easily.
 
-    $ npm install --save metalsmith-link-globs
+    $ npm install --save metalsmith-unchanged-links
 
 Alternately you may edit your `package.json` and add this to your `dependencies` object:
 
@@ -62,7 +51,7 @@ Alternately you may edit your `package.json` and add this to your `dependencies`
         ...
         "dependencies": {
             ...
-            "metalsmith-link-globs": "*"
+            "metalsmith-unchanged-links": "*"
             ...
         }
         ...
@@ -76,50 +65,43 @@ Include this plugin the same as any other Metalsmith plugin. This first example 
 
     {
         "plugins": {
-            "metalsmith-link-globs": {
-                "elementMatchOptions": {},
+            "metalsmith-unchanged-links": {
                 "encoding": "utf8",
+                "error": true,
+                "ignoreNodes": [
+                    "code",
+                    "script"
+                ],
                 "match": "**/*.html",
-                "matchOptions": {},
-                "nodes": [
-                    {
-                        "element": "a",
-                        "property": "href"
-                    },
-                    {
-                        "element": "img",
-                        "property": "src"
-                    },
-                    {
-                        "element": "link",
-                        "property": "href"
-                    },
-                    {
-                        "element": "script",
-                        "property": "src"
-                    }
-                ]
+                "matchOptions": {}
             }
         }
     }
 
 This is a JavaScript example, which also includes a brief explanation of the options.
 
-    var linkGlobs = require("metalsmith-link-globs");
+    var unchangedLinks = require("metalsmith-unchanged-links");
 
     // Then in your list of plugins you use it.
-    .use(linkGlobs());
+    .use(unchangedLinks());
 
     // Alternately, you can specify options. The values shown here are
     // the defaults.
-    .use(linkGlobs({
-        // Matching options for the glob patterns that are used within
-        // elements.
-        "elementMatchOptions": {},
-
+    .use(unchangedLinks({
         // How buffers are decoded into text and encoded again. Only
         // affects the files being changed.
         "encoding": "utf8",
+
+        // Error when there are problems detected. When this is set to
+        // `false`, warning messages are still printed but the build does
+        // not break.
+        "error": true,
+
+        // What HTML nodes should be excluded from the search.
+        "ignoreNodes": [
+            "code",
+            "script"
+        ],
 
         // What files to target.
         "match": "**/*.html",
@@ -127,135 +109,74 @@ This is a JavaScript example, which also includes a brief explanation of the opt
         // Options to select what files should be targeted.
         "matchOptions": {},
 
-        // A list of HTML element and property names that should be
-        // processed.
-        "nodes": [
-            {
-                "element": "a",
-                "property": "href"
-            },
-            {
-                "element": "img",
-                "property": "src"
-            },
-            {
-                "element": "link",
-                "property": "href"
-            },
-            {
-                "element": "script",
-                "property": "src"
-            }
-        ]
+        // Search pattern to use. This is expected to be a regular expression,
+        // so it can not be defined in JSON.
+        "pattern": /\[(\w|\s)+\]/
     });
 
-This uses [metalsmith-plugin-kit] to match files. The `.matchOptions` and `.elementMatchOptions` objects are just options passed directly to that library for matching files.
+This uses [metalsmith-plugin-kit] to match files. The `.matchOptions` object and `.match` property are just options passed directly to that library for matching files.
 
 If you want to see what files are processed, what elements are found and the resulting list of matching files, enable debugging.
 
-    DEBUG=metalsmith-link-globs metalsmith
+    DEBUG=metalsmith-unchanged-links metalsmith
 
 
 API
 ---
 
-<a name="module_metalsmith-link-globs"></a>
+<a name="module_metalsmith-unchanged-links"></a>
 
-## metalsmith-link-globs
-Metalsmith Link Globs will repeat HTML elements so you can link to
-one or several files, based on what is in your build. Your debug build
-may not combine and minify files but your production build does.
-Eliminate the hassle and use a layout like this to link all files.
-
-    <script src="js/*.js"></script>
+## metalsmith-unchanged-links
+Find links that were in Markdown and were not converted to HTML.
 
 
-* [metalsmith-link-globs](#module_metalsmith-link-globs)
-    * [module.exports(options)](#exp_module_metalsmith-link-globs--module.exports) ⇒ <code>function</code> ⏏
-        * [~processNode(node, sourceFile, content, fileList)](#module_metalsmith-link-globs--module.exports..processNode)
-        * [~metalsmithFile](#module_metalsmith-link-globs--module.exports..metalsmithFile)
-        * [~metalsmithFileCollection](#module_metalsmith-link-globs--module.exports..metalsmithFileCollection) : <code>Object.&lt;string, module:metalsmith-link-globs--module.exports~metalsmithFile&gt;</code>
-        * [~nodeDefinition](#module_metalsmith-link-globs--module.exports..nodeDefinition) : <code>Object</code>
-        * [~options](#module_metalsmith-link-globs--module.exports..options) : <code>Object</code>
+* [metalsmith-unchanged-links](#module_metalsmith-unchanged-links)
+    * [module.exports(options)](#exp_module_metalsmith-unchanged-links--module.exports) ⇒ <code>function</code> ⏏
+        * [~metalsmithFile](#module_metalsmith-unchanged-links--module.exports..metalsmithFile)
+        * [~metalsmithFileCollection](#module_metalsmith-unchanged-links--module.exports..metalsmithFileCollection) : <code>Object.&lt;string, module:metalsmith-unchanged-links--module.exports~metalsmithFile&gt;</code>
+        * [~options](#module_metalsmith-unchanged-links--module.exports..options) : <code>Object</code>
 
-<a name="exp_module_metalsmith-link-globs--module.exports"></a>
+<a name="exp_module_metalsmith-unchanged-links--module.exports"></a>
 
 ### module.exports(options) ⇒ <code>function</code> ⏏
 Factory to build middleware for Metalsmith.
 
-**Kind**: Exported function
+**Kind**: Exported function  
 **Params**
 
-- options [<code>options</code>](#module_metalsmith-link-globs--module.exports..options)
+- options [<code>options</code>](#module_metalsmith-unchanged-links--module.exports..options)
 
-<a name="module_metalsmith-link-globs--module.exports..processNode"></a>
-
-#### module.exports~processNode(node, sourceFile, content, fileList)
-Rewrites element tags in the HTML for a given node definition.
-
-**Kind**: inner method of [<code>module.exports</code>](#exp_module_metalsmith-link-globs--module.exports)
-**Params**
-
-- node <code>Object</code>
-- sourceFile <code>string</code>
-- content <code>Cheerio</code>
-- fileList <code>Array.&lt;string&gt;</code>
-
-<a name="module_metalsmith-link-globs--module.exports..metalsmithFile"></a>
+<a name="module_metalsmith-unchanged-links--module.exports..metalsmithFile"></a>
 
 #### module.exports~metalsmithFile
 Metalsmith file object.
 
-**Kind**: inner typedef of [<code>module.exports</code>](#exp_module_metalsmith-link-globs--module.exports)
+**Kind**: inner typedef of [<code>module.exports</code>](#exp_module_metalsmith-unchanged-links--module.exports)  
 **Properties**
 
-| Name | Type |
-| --- | --- |
-| contents | <code>Buffer</code> | 
-| mode | <code>string</code> | 
+- contents <code>Buffer</code>  
+- mode <code>string</code>  
 
-<a name="module_metalsmith-link-globs--module.exports..metalsmithFileCollection"></a>
+<a name="module_metalsmith-unchanged-links--module.exports..metalsmithFileCollection"></a>
 
-#### module.exports~metalsmithFileCollection : <code>Object.&lt;string, module:metalsmith-link-globs--module.exports~metalsmithFile&gt;</code>
+#### module.exports~metalsmithFileCollection : <code>Object.&lt;string, module:metalsmith-unchanged-links--module.exports~metalsmithFile&gt;</code>
 Metalsmith collection of files.
 
-**Kind**: inner typedef of [<code>module.exports</code>](#exp_module_metalsmith-link-globs--module.exports)
-<a name="module_metalsmith-link-globs--module.exports..nodeDefinition"></a>
-
-#### module.exports~nodeDefinition : <code>Object</code>
-Defines a node name and the property that has the glob expression.  For
-instance, images may look like `<img src="*.jpg">`. This would match all
-jpeg files in the current folder. The definition for `img` tags should
-look like this:
-
-    {
-        element: "img",
-        property: "src"
-    }
-
-**Kind**: inner typedef of [<code>module.exports</code>](#exp_module_metalsmith-link-globs--module.exports)
-**Properties**
-
-| Name | Type | Description |
-| --- | --- | --- |
-| element | <code>string</code> | Name of element to fine. |
-| property | <code>string</code> | Attribute or property name of the element that contains the glob expression. |
-
-<a name="module_metalsmith-link-globs--module.exports..options"></a>
+**Kind**: inner typedef of [<code>module.exports</code>](#exp_module_metalsmith-unchanged-links--module.exports)  
+<a name="module_metalsmith-unchanged-links--module.exports..options"></a>
 
 #### module.exports~options : <code>Object</code>
 Options for the middleware factory.
 
-**Kind**: inner typedef of [<code>module.exports</code>](#exp_module_metalsmith-link-globs--module.exports)
+**Kind**: inner typedef of [<code>module.exports</code>](#exp_module_metalsmith-unchanged-links--module.exports)  
 **Properties**
 
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| elementMatchOptions | <code>module:metalsmith-plugin-kit~matchOptions</code> | <code>{}</code> | Controls what files match the patterns found in the HTML elements. |
-| encoding | <code>string</code> | <code>&quot;utf8&quot;</code> | Buffer encoding. |
-| match | <code>module:metalsmith-plugin-kit~matchList</code> |  | Defaults to `*.html` in any folder. |
-| matchOptions | <code>module:metalsmith-plugin-kit~matchOptions</code> | <code>{}</code> | Controls how to find files that have elements to repeat. |
-| nodes | <code>Array.&lt;module:metalsmith-plugin-kit~nodeDefinition&gt;</code> |  | What HTML elements to process. Defaults to a, img, link and script. |
+- encoding <code>string</code> - Buffer encoding.  
+- error <code>boolean</code>  
+- ignoreNodes <code>Array.&lt;string&gt;</code> - HTML elements to ignore. Defaults to ["code","script"].  
+- match <code>module:metalsmith-plugin-kit~match</code> - Defaults to `*.html` in any folder.  
+- matchOptions <code>module:metalsmith-plugin-kit~matchOptions</code> - Controls how to find files that have elements to repeat.  
+- pattern <code>RegExp</code> - Search pattern to find links that were not converted.  
 
 
 
@@ -277,15 +198,15 @@ License
 This software is licensed under a [MIT license][LICENSE] that contains additional non-advertising and patent-related clauses.  [Read full license terms][LICENSE]
 
 
-[codecov-badge]: https://img.shields.io/codecov/c/github/connected-world-services/metalsmith-link-globs/master.svg
-[codecov-link]: https://codecov.io/github/connected-world-services/metalsmith-link-globs?branch=master
-[dependencies-badge]: https://img.shields.io/david/connected-world-services/metalsmith-link-globs.svg
-[dependencies-link]: https://david-dm.org/connected-world-services/metalsmith-link-globs
-[devdependencies-badge]: https://img.shields.io/david/dev/connected-world-services/metalsmith-link-globs.svg
-[devdependencies-link]: https://david-dm.org/connected-world-services/metalsmith-link-globs#info=devDependencies
+[codecov-badge]: https://img.shields.io/codecov/c/github/connected-world-services/metalsmith-unchanged-links/master.svg
+[codecov-link]: https://codecov.io/github/connected-world-services/metalsmith-unchanged-links?branch=master
+[dependencies-badge]: https://img.shields.io/david/connected-world-services/metalsmith-unchanged-links.svg
+[dependencies-link]: https://david-dm.org/connected-world-services/metalsmith-unchanged-links
+[devdependencies-badge]: https://img.shields.io/david/dev/connected-world-services/metalsmith-unchanged-links.svg
+[devdependencies-link]: https://david-dm.org/connected-world-services/metalsmith-unchanged-links#info=devDependencies
 [LICENSE]: LICENSE.md
 [metalsmith-plugin-kit]: https://github.com/fidian/metalsmith-plugin-kit
-[npm-badge]: https://img.shields.io/npm/v/metalsmith-link-globs.svg
-[npm-link]: https://npmjs.org/package/metalsmith-link-globs
-[travis-badge]: https://img.shields.io/travis/connected-world-services/metalsmith-link-globs/master.svg
-[travis-link]: http://travis-ci.org/connected-world-services/metalsmith-link-globs
+[npm-badge]: https://img.shields.io/npm/v/metalsmith-unchanged-links.svg
+[npm-link]: https://npmjs.org/package/metalsmith-unchanged-links
+[travis-badge]: https://img.shields.io/travis/connected-world-services/metalsmith-unchanged-links/master.svg
+[travis-link]: http://travis-ci.org/connected-world-services/metalsmith-unchanged-links
